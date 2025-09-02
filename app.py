@@ -1,11 +1,13 @@
-
 import streamlit as st
 import json
 from pathlib import Path
 from datetime import datetime
+import tempfile
 
-DATA_FILE = Path("todos.json")
+# Use a writable temp directory for Streamlit Cloud
+DATA_FILE = Path(tempfile.gettempdir()) / "todos.json"
 
+# Load todos from file
 def load_todos():
     if DATA_FILE.exists():
         try:
@@ -14,14 +16,18 @@ def load_todos():
             return []
     return []
 
+# Save todos to file
 def save_todos(todos):
     DATA_FILE.write_text(json.dumps(todos, indent=2))
 
 st.set_page_config(page_title="Simple To‑Do List", page_icon="✅", layout="centered")
-
 st.title("✅ Simple To‑Do List (Streamlit + Python)")
 
-todos = load_todos()
+# Initialize session state
+if "todos" not in st.session_state:
+    st.session_state.todos = load_todos()
+
+todos = st.session_state.todos
 
 # Add new todo
 with st.form("Add task"):
@@ -37,6 +43,7 @@ with st.form("Add task"):
             "created_at": datetime.now().isoformat()
         })
         save_todos(todos)
+        st.success("Task added!")
         st.experimental_rerun()
 
 st.markdown("---")
@@ -45,7 +52,7 @@ if not todos:
 else:
     # Sort by done then priority then created_at
     priority_order = {"High": 0, "Medium": 1, "Low": 2}
-    todos = sorted(todos, key=lambda t: (t["done"], priority_order.get(t.get("priority","Low")), t.get("created_at","")))
+    todos.sort(key=lambda t: (t["done"], priority_order.get(t.get("priority","Low")), t.get("created_at","")))
 
     for t in todos:
         cols = st.columns([0.05, 0.65, 0.15, 0.15])
@@ -70,12 +77,12 @@ else:
                     save_todos(todos)
                     st.experimental_rerun()
         if cols[3].button("Delete", key=f"del_{t['id']}"):
-            todos = [x for x in todos if x["id"] != t["id"]]
+            todos[:] = [x for x in todos if x["id"] != t["id"]]
             save_todos(todos)
             st.experimental_rerun()
 
 st.markdown("---")
 if st.button("Clear completed tasks"):
-    todos = [x for x in todos if not x["done"]]
+    todos[:] = [x for x in todos if not x["done"]]
     save_todos(todos)
     st.experimental_rerun()
