@@ -4,10 +4,10 @@ from pathlib import Path
 from datetime import datetime
 import tempfile
 
-# Use a writable temp directory for Streamlit Cloud
+# File path
 DATA_FILE = Path(tempfile.gettempdir()) / "todos.json"
 
-# Load todos from file
+# Load/save todos
 def load_todos():
     if DATA_FILE.exists():
         try:
@@ -16,21 +16,20 @@ def load_todos():
             return []
     return []
 
-# Save todos to file
 def save_todos(todos):
     DATA_FILE.write_text(json.dumps(todos, indent=2))
 
 st.set_page_config(page_title="Simple To‑Do List", page_icon="✅", layout="centered")
-st.title("✅ Simple To‑Do List (Streamlit + Python)")
+st.title("✅ Simple To‑Do List")
 
-# Initialize session state
+# Session state for todos
 if "todos" not in st.session_state:
     st.session_state.todos = load_todos()
 
 todos = st.session_state.todos
 
-# Add new todo
-with st.form("Add task"):
+# Add task
+with st.form("add_task_form"):
     new_task = st.text_input("New task", "")
     priority = st.selectbox("Priority", ["Low", "Medium", "High"])
     submit = st.form_submit_button("Add")
@@ -44,13 +43,12 @@ with st.form("Add task"):
         })
         save_todos(todos)
         st.success("Task added!")
-        st.experimental_rerun()
 
 st.markdown("---")
+
 if not todos:
     st.info("No tasks yet — add one above!")
 else:
-    # Sort by done then priority then created_at
     priority_order = {"High": 0, "Medium": 1, "Low": 2}
     todos.sort(key=lambda t: (t["done"], priority_order.get(t.get("priority","Low")), t.get("created_at","")))
 
@@ -60,14 +58,19 @@ else:
         if done != t["done"]:
             t["done"] = done
             save_todos(todos)
-            st.experimental_rerun()
+            st.experimental_rerun = True  # <- Replace rerun with session_state refresh
+
         task_label = t["task"] + (f"  — *{t['priority']}*" if t.get("priority") else "")
         if t["done"]:
             cols[1].markdown(f"~~{task_label}~~")
         else:
             cols[1].markdown(task_label)
+
         if cols[2].button("Edit", key=f"edit_{t['id']}"):
-            with st.form(f"edit_form_{t['id']}", clear_on_submit=False):
+            st.session_state.edit_id = t['id']
+
+        if 'edit_id' in st.session_state and st.session_state.edit_id == t['id']:
+            with st.form(f"edit_form_{t['id']}"):
                 new_text = st.text_input("Task text", value=t["task"])
                 new_pr = st.selectbox("Priority", ["Low","Medium","High"], index=["Low","Medium","High"].index(t.get("priority","Low")))
                 saved = st.form_submit_button("Save")
@@ -75,14 +78,12 @@ else:
                     t["task"] = new_text.strip()
                     t["priority"] = new_pr
                     save_todos(todos)
-                    st.experimental_rerun()
+                    del st.session_state.edit_id
+
         if cols[3].button("Delete", key=f"del_{t['id']}"):
             todos[:] = [x for x in todos if x["id"] != t["id"]]
             save_todos(todos)
-            st.experimental_rerun()
 
-st.markdown("---")
 if st.button("Clear completed tasks"):
     todos[:] = [x for x in todos if not x["done"]]
     save_todos(todos)
-    st.experimental_rerun()
